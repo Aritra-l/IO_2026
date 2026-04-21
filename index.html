@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPS Simulations – by Aritra</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #21262d;
+    --accent:   #f39c12;
+    --accent2:  #e74c3c;
+    --accent3:  #27ae60;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 40px 40px 32px;
+    text-align: center;
+    position: relative;
+  }
+
+  .badge-created {
+    display: inline-block;
+    background: var(--accent);
+    color: #111;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+
+  header h1 {
+    font-size: clamp(1.8em, 4vw, 2.8em);
+    color: var(--accent);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  header p.subtitle {
+    color: var(--muted);
+    font-size: 1em;
+    margin-top: 10px;
+    max-width: 600px;
+    margin-inline: auto;
+    line-height: 1.6;
+  }
+
+  /* ─── RPS EMOJI ROW ─── */
+  .emoji-row {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    font-size: 2em;
+    margin-top: 20px;
+  }
+
+  .emoji-row span {
+    animation: float 3s ease-in-out infinite;
+  }
+  .emoji-row span:nth-child(2) { animation-delay: 1s; }
+  .emoji-row span:nth-child(3) { animation-delay: 2s; }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+
+  /* ─── MAIN GRID ─── */
+  main {
+    flex: 1;
+    padding: 48px 32px;
+    max-width: 1100px;
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .section-title {
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 26px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+  }
+  .card:nth-child(1)::before { background: var(--accent); }
+  .card:nth-child(2)::before { background: #9b59b6; }
+  .card:nth-child(3)::before { background: var(--accent3); }
+
+  .card:hover {
+    transform: translateY(-5px);
+    border-color: #444c56;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  }
+
+  .card-icon {
+    font-size: 2.4em;
+    line-height: 1;
+  }
+
+  .card-tag {
+    display: inline-block;
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    width: fit-content;
+  }
+  .card:nth-child(1) .card-tag { background: rgba(243,156,18,0.15); color: var(--accent); }
+  .card:nth-child(2) .card-tag { background: rgba(155,89,182,0.15); color: #c39bd3; }
+  .card:nth-child(3) .card-tag { background: rgba(39,174,96,0.15);  color: #6fcf97; }
+
+  .card h2 {
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+
+  .card p {
+    font-size: 0.88em;
+    color: var(--muted);
+    line-height: 1.65;
+    flex: 1;
+  }
+
+  .card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--accent);
+    margin-top: 4px;
+    transition: gap 0.2s;
+  }
+  .card:nth-child(2) .card-link { color: #c39bd3; }
+  .card:nth-child(3) .card-link { color: #6fcf97; }
+
+  .card:hover .card-link { gap: 10px; }
+
+  /* ─── ABOUT ─── */
+  .about {
+    margin-top: 56px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .about-text h3 {
+    font-size: 1em;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .about-text p {
+    font-size: 0.87em;
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 560px;
+  }
+
+  .about-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pill {
+    font-size: 0.75em;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 999px;
+  }
+
+  /* ─── FOOTER ─── */
+  footer {
+    text-align: center;
+    padding: 24px;
+    font-size: 0.82em;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  footer strong { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge-created">Created by Aritra</div>
+  <h1>Rock · Paper · Scissors<br>Simulation Suite</h1>
+  <p class="subtitle">
+    An interactive collection of evolutionary game theory simulations exploring
+    strategy dynamics, Markov analysis, and agent-based modelling in RPS.
+  </p>
+  <div class="emoji-row">
+    <span>🪨</span><span>📄</span><span>✂️</span>
+  </div>
+</header>
+
+<main>
+  <p class="section-title">Simulations</p>
+
+  <div class="cards">
+
+    <a class="card" href="rps_pure_evolution.html">
+      <div class="card-icon">🧬</div>
+      <span class="card-tag">Evolutionary</span>
+      <h2>Pure Strategy Evolution</h2>
+      <p>
+        Watch populations of pure-strategy agents (Rock, Paper, or Scissors) compete
+        and evolve over generations. Explore how selection pressure, mutation rate, and
+        payoff structure shape the emergent dynamics on a ternary phase diagram.
+      </p>
+      <span class="card-link">Launch simulation →</span>
+    </a>
+
+    <a class="card" href="rps_pure_evolution_1.html">
+      <div class="card-icon">📊</div>
+      <span class="card-tag">Visualisation</span>
+      <h2>Pure Strategy Depiction</h2>
+      <p>
+        Clear depiction of emergent dynamics on a ternary phase diagram.
+      </p>
+      <span class="card-link">Launch simulation →</span>
+    </a>
+    
+    <a class="card" href="rps_mixed_evolution.html">
+      <div class="card-icon">⚖️</div>
+      <span class="card-tag">Mixed Strategies</span>
+      <h2>Mixed Strategy Evolution</h2>
+      <p>
+        Explore agents that play probabilistic mixed strategies. See how populations
+        converge to Nash equilibria (or fail to), and how noise and mutation push
+        trajectories across the strategy simplex.
+      </p>
+      <span class="card-link">Launch simulation →</span>
+    </a>
+
+
+    <a class="card" href="rps_markov_analysis.html">
+      <div class="card-icon"></div>
+      <span class="card-tag">Markov Analysis</span>
+      <h2>Markov Chain Analysis</h2>
+      <p>
+        Dive deep into the stochastic transition dynamics of RPS strategies.
+        Visualise steady-state distributions, convergence behaviour, and transition
+        matrices derived from Markov chain theory.
+      </p>
+      <span class="card-link">Launch simulation →</span>
+    </a>
+
+
+  </div>
+
+  <div class="about">
+    <div class="about-text">
+      <h3>About This Project</h3>
+      <p>
+        These simulations are built entirely in vanilla HTML, CSS, and JavaScript —
+        no frameworks, no build steps. Each page is self-contained and runs entirely
+        in the browser. The project applies evolutionary game theory to the classic
+        Rock-Paper-Scissors game to reveal surprisingly rich emergent behaviour.
+      </p>
+    </div>
+    <div class="about-pills">
+      <span class="pill">Evolutionary Game Theory</span>
+      <span class="pill">Markov Chains</span>
+      <span class="pill">Nash Equilibrium</span>
+      <span class="pill">Agent-Based Modelling</span>
+      <span class="pill">Vanilla JS</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Made with 🧠 by <strong>Aritra</strong> &nbsp;·&nbsp; All simulations run client-side in your browser
+</footer>
+
+</body>
+</html>

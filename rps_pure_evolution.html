@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RPS Pure Strategy Evolution</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', Arial, sans-serif; }
+  header { background: linear-gradient(135deg,#0f3460,#16213e);
+           padding: 16px 32px; border-bottom: 2px solid #f39c12; }
+  header h1 { font-size: 1.6em; color: #f39c12; }
+  header p  { font-size: 0.88em; color: #aaa; margin-top: 4px; }
+
+  .main { display: flex; gap: 16px; padding: 16px 24px; height: calc(100vh - 72px); }
+
+  /* ---- LEFT: simulation canvas ---- */
+  .sim-panel { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; }
+  #simCanvas { border: 2px solid #333; border-radius: 8px; display: block;
+               image-rendering: pixelated; }
+
+  /* ---- RIGHT: controls + charts ---- */
+  .right-panel { flex: 1; display: flex; flex-direction: column; gap: 12px;
+                 min-width: 0; overflow-y: auto; }
+
+  .card { background: #16213e; border-radius: 10px; padding: 14px 18px;
+          border: 1px solid #0f3460; }
+  .card h3 { font-size: 0.95em; color: #f39c12; margin-bottom: 10px;
+              text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* controls */
+  .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .ctrl-item label { font-size: 0.82em; color: #aaa; display: block; margin-bottom: 3px; }
+  .ctrl-item input[type=range] { width: 100%; accent-color: #f39c12; }
+  .val-badge { font-size: 0.88em; color: #f39c12; font-weight: bold; margin-left: 6px; }
+
+  /* btn row */
+  .btn-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  button { padding: 7px 18px; border: none; border-radius: 6px; cursor: pointer;
+           font-size: 0.88em; font-weight: bold; transition: all 0.18s; }
+  #btnPlay  { background: #27ae60; color: white; }
+  #btnPlay:hover  { background: #2ecc71; }
+  #btnReset { background: #e74c3c; color: white; }
+  #btnReset:hover { background: #c0392b; }
+  #btnStep  { background: #3498db; color: white; }
+  #btnStep:hover  { background: #2980b9; }
+
+  /* population bar */
+  .pop-bar { display: flex; height: 28px; border-radius: 6px; overflow: hidden;
+             margin-bottom: 6px; }
+  .pop-seg { display: flex; align-items: center; justify-content: center;
+             font-size: 0.78em; font-weight: bold; color: white;
+             transition: width 0.3s; overflow: hidden; min-width: 0; }
+
+  /* counts row */
+  .counts { display: flex; gap: 16px; font-size: 0.9em; }
+  .count-item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ternary canvas */
+  #ternaryCanvas { width: 100%; border-radius: 8px; }
+
+  /* chart */
+  #chartCanvas { width: 100%; border-radius: 4px; }
+
+  /* gen counter */
+  .gen-ctr { font-size: 1.1em; color: #f39c12; font-weight: bold; }
+  .status-row { display: flex; justify-content: space-between; align-items: center; }
+
+  /* mutation toggle */
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .toggle { position: relative; width: 42px; height: 22px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider-tog { position: absolute; inset: 0; background: #444; border-radius: 22px;
+                cursor: pointer; transition: 0.3s; }
+  .slider-tog:before { content:''; position:absolute; width:16px; height:16px;
+                       left:3px; top:3px; background:white; border-radius:50%;
+                       transition:0.3s; }
+  input:checked + .slider-tog { background: #f39c12; }
+  input:checked + .slider-tog:before { transform: translateX(20px); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🪨 ✂️ 📄 &nbsp; Rock · Paper · Scissors — Pure Strategy Evolution</h1>
+  <p>Agent-based simulation · each cell hosts one organism · cyclic dominance drives population cycles</p>
+</header>
+
+<div class="main">
+  <!-- SIMULATION CANVAS -->
+  <div class="sim-panel">
+    <canvas id="simCanvas"></canvas>
+    <div class="card" style="padding:10px 14px;">
+      <div class="status-row">
+        <span>Generation: <span class="gen-ctr" id="genCtr">0</span></span>
+        <span id="fixMsg" style="color:#f39c12;font-size:0.85em;"></span>
+      </div>
+      <div class="pop-bar" id="popBar" style="margin-top:8px;">
+        <div class="pop-seg" id="barR" style="background:#e74c3c;width:33.3%">R</div>
+        <div class="pop-seg" id="barP" style="background:#3498db;width:33.3%">P</div>
+        <div class="pop-seg" id="barS" style="background:#27ae60;width:33.3%">S</div>
+      </div>
+      <div class="counts" style="margin-top:6px;">
+        <div class="count-item"><div class="dot" style="background:#e74c3c"></div>
+          Rock: <b id="cntR">300</b></div>
+        <div class="count-item"><div class="dot" style="background:#3498db"></div>
+          Paper: <b id="cntP">300</b></div>
+        <div class="count-item"><div class="dot" style="background:#27ae60"></div>
+          Scissors: <b id="cntS">300</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS + CHARTS -->
+  <div class="right-panel">
+
+    <!-- CONTROLS -->
+    <div class="card">
+      <h3>Controls</h3>
+      <div class="ctrl-grid">
+        <div class="ctrl-item">
+          <label>Grid size: <span class="val-badge" id="lblGrid">30×30</span></label>
+          <input type="range" id="slGrid" min="15" max="60" value="30" step="5">
+        </div>
+        <div class="ctrl-item">
+          <label>Speed: <span class="val-badge" id="lblSpeed">medium</span></label>
+          <input type="range" id="slSpeed" min="1" max="10" value="5">
+        </div>
+        <div class="ctrl-item">
+          <label>Win offspring: <span class="val-badge" id="lblWin">2</span></label>
+          <input type="range" id="slWin" min="1" max="4" value="2" step="1">
+        </div>
+        <div class="ctrl-item">
+          <label>Tie offspring: <span class="val-badge" id="lblTie">1</span></label>
+          <input type="range" id="slTie" min="0" max="3" value="1" step="1">
+        </div>
+      </div>
+      <div class="toggle-row" style="margin-top:10px;">
+        <label class="toggle">
+          <input type="checkbox" id="chkMut">
+          <span class="slider-tog"></span>
+        </label>
+        <span style="font-size:0.9em;">Mutation
+          (<span id="lblMut">1%</span> chance offspring mutate)</span>
+        <input type="range" id="slMut" min="0" max="10" value="1" step="1"
+               style="width:100px;accent-color:#f39c12;">
+      </div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button id="btnPlay">▶ Play</button>
+        <button id="btnStep">⏭ Step</button>
+        <button id="btnReset">↺ Reset</button>
+        <button id="btnScatter" style="background:#9b59b6;color:white;">
+          🔀 Randomize</button>
+      </div>
+    </div>
+
+    <!-- TERNARY PLOT -->
+    <div class="card">
+      <h3>Simplex Trajectory <span style="color:#888;font-weight:normal;font-size:0.85em;">
+        (● = current position)</span></h3>
+      <canvas id="ternaryCanvas" height="220"></canvas>
+    </div>
+
+    <!-- TIME CHART -->
+    <div class="card">
+      <h3>Population Over Time</h3>
+      <canvas id="chartCanvas" height="160"></canvas>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="card" style="padding:10px 14px;">
+      <div style="display:flex;gap:18px;font-size:0.85em;flex-wrap:wrap;">
+        <span>🪨 <b style="color:#e74c3c">Rock</b> beats Scissors</span>
+        <span>✂️ <b style="color:#27ae60">Scissors</b> beats Paper</span>
+        <span>📄 <b style="color:#3498db">Paper</b> beats Rock</span>
+        <span style="color:#aaa">Cyclic dominance → no pure equilibrium</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+// TYPES: 0=Rock, 1=Paper, 2=Scissors
+// ============================================================
+const COLORS = ['#e74c3c','#3498db','#27ae60'];
+const EMOJIS = ['R','P','S'];
+const NAMES  = ['Rock','Paper','Scissors'];
+
+// beats[i] = type that i beats
+// 0(Rock) beats 2(Scissors), 1(Paper) beats 0(Rock), 2(Scissors) beats 1(Paper)
+const BEATS = [2, 0, 1];   // BEATS[i] is what i beats
+
+let GRID = 30;
+let grid = [], nextGrid = [];
+let gen  = 0;
+let running = false;
+let animId  = null;
+let lastTime = 0;
+let trajectory = [];   // { r, p, s }
+let chartHistory = { r:[], p:[], s:[] };
+const MAX_HIST = 300;
+
+// ---- DOM ----
+const simCanvas     = document.getElementById('simCanvas');
+const simCtx        = simCanvas.getContext('2d');
+const ternaryCanvas = document.getElementById('ternaryCanvas');
+const ternCtx       = ternaryCanvas.getContext('2d');
+const chartCanvas   = document.getElementById('chartCanvas');
+const chartCtx      = chartCanvas.getContext('2d');
+
+// ---- Sliders ----
+const slGrid  = document.getElementById('slGrid');
+const slSpeed = document.getElementById('slSpeed');
+const slWin   = document.getElementById('slWin');
+const slTie   = document.getElementById('slTie');
+const slMut   = document.getElementById('slMut');
+const chkMut  = document.getElementById('chkMut');
+
+function getWin()  { return parseInt(slWin.value); }
+function getTie()  { return parseInt(slTie.value); }
+function getMutR() { return chkMut.checked ? parseInt(slMut.value)/100 : 0; }
+function getDelay(){ return Math.max(10, 200 - parseInt(slSpeed.value)*18); }
+
+// ---- Init ----
+function initGrid(randomize=false) {
+  const n = GRID * GRID;
+  grid = new Uint8Array(n);
+  if (randomize) {
+    for (let i = 0; i < n; i++) grid[i] = Math.floor(Math.random()*3);
+  } else {
+    // Equal thirds in clusters
+    const third = Math.floor(GRID/3);
+    for (let r = 0; r < GRID; r++)
+      for (let c = 0; c < GRID; c++) {
+        let t = c < third ? 0 : c < third*2 ? 1 : 2;
+        grid[r*GRID+c] = t;
+      }
+  }
+  gen = 0;
+  trajectory = [];
+  chartHistory = {r:[],p:[],s:[]};
+  document.getElementById('fixMsg').textContent = '';
+}
+
+function resize() {
+  GRID = parseInt(slGrid.value);
+  const SZ = Math.min(Math.floor((window.innerHeight - 160) * 0.85), 580);
+  const cell = Math.floor(SZ / GRID);
+  simCanvas.width  = cell * GRID;
+  simCanvas.height = cell * GRID;
+  simCanvas.dataset.cell = cell;
+  initGrid(false);
+  render();
+}
+
+// ---- Update (one generation) ----
+function step() {
+  const n = GRID * GRID;
+  nextGrid = new Uint8Array(grid);
+  const WIN  = getWin();
+  const TIE  = getTie();
+  const MUTR = getMutR();
+
+  // Random pairwise matching: shuffle indices, pair them
+  const idx = Array.from({length:n},(_,i)=>i);
+  for (let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]];}
+
+  const pool = []; // [type, type, ...]  new population pool
+  for (let k=0; k<n-1; k+=2) {
+    const i=idx[k], j=idx[k+1];
+    const a=grid[i], b=grid[j];
+    let offspring_a=[], offspring_b=[];
+    if (BEATS[a]===b) {       // a wins
+      for(let x=0;x<WIN;x++) offspring_a.push(mutate(a,MUTR));
+    } else if (BEATS[b]===a) { // b wins
+      for(let x=0;x<WIN;x++) offspring_b.push(mutate(b,MUTR));
+    } else {                   // tie
+      for(let x=0;x<TIE;x++) offspring_a.push(mutate(a,MUTR));
+      for(let x=0;x<TIE;x++) offspring_b.push(mutate(b,MUTR));
+    }
+    offspring_a.forEach(t=>pool.push(t));
+    offspring_b.forEach(t=>pool.push(t));
+  }
+  if (n%2===1) pool.push(mutate(grid[idx[n-1]],MUTR));
+
+  // Trim / pad pool back to n
+  while (pool.length < n) pool.push(pool[Math.floor(Math.random()*pool.length)]);
+  // Shuffle pool
+  for (let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  // Place back
+  for (let i=0;i<n;i++) nextGrid[i] = pool[i] ?? grid[i];
+
+  grid = nextGrid;
+  gen++;
+  updateStats();
+}
+
+function mutate(type, rate) {
+  if (rate > 0 && Math.random() < rate) {
+    return Math.floor(Math.random()*3);
+  }
+  return type;
+}
+
+// ---- Render ----
+function render() {
+  const cell = parseInt(simCanvas.dataset.cell) || Math.floor(simCanvas.width/GRID);
+  simCtx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+  for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++) {
+    const t = grid[r*GRID+c];
+    simCtx.fillStyle = COLORS[t];
+    simCtx.fillRect(c*cell, r*cell, cell-1, cell-1);
+    if (cell >= 12) {
+      simCtx.fillStyle = 'rgba(255,255,255,0.85)';
+      simCtx.font = `bold ${Math.floor(cell*0.55)}px Arial`;
+      simCtx.textAlign = 'center';
+      simCtx.textBaseline = 'middle';
+      simCtx.fillText(EMOJIS[t], c*cell+cell/2, r*cell+cell/2);
+    }
+  }
+}
+
+// ---- Stats & UI ----
+function updateStats() {
+  const n = GRID*GRID;
+  let cr=0,cp=0,cs=0;
+  for (const t of grid) { if(t===0)cr++; else if(t===1)cp++; else cs++; }
+  const fr=cr/n, fp=cp/n, fs=cs/n;
+
+  document.getElementById('genCtr').textContent = gen;
+  document.getElementById('cntR').textContent = cr;
+  document.getElementById('cntP').textContent = cp;
+  document.getElementById('cntS').textContent = cs;
+
+  document.getElementById('barR').style.width = (fr*100)+'%';
+  document.getElementById('barP').style.width = (fp*100)+'%';
+  document.getElementById('barS').style.width = (fs*100)+'%';
+
+  trajectory.push({r:fr,p:fp,s:fs});
+  chartHistory.r.push(fr); chartHistory.p.push(fp); chartHistory.s.push(fs);
+  if (chartHistory.r.length > MAX_HIST) {
+    chartHistory.r.shift(); chartHistory.p.shift(); chartHistory.s.shift();
+  }
+
+  // Check fixation
+  if (fr>0.98||fp>0.98||fs>0.98) {
+    const winner = fr>0.98?'Rock':fp>0.98?'Paper':'Scissors';
+    document.getElementById('fixMsg').textContent = `⚡ ${winner} dominates!`;
+    if (!chkMut.checked) { stopSim(); }
+  }
+
+  drawTernary();
+  drawChart();
+}
+
+// ---- Ternary ----
+function ternXY(r, p, s) {
+  const W = ternaryCanvas.width, H = ternaryCanvas.height;
+  const pad = 38;
+  const tw = W - 2*pad, th = H - 2*pad;
+  const bh = th * 0.88;
+  // Rock=bottom-left, Paper=bottom-right, Scissors=top
+  const x = pad + (p + s*0.5) * tw;
+  const y = (H-pad) - s * bh;
+  return {x, y};
+}
+
+function drawTernary() {
+  const W = ternaryCanvas.width = ternaryCanvas.offsetWidth;
+  const H = ternaryCanvas.height;
+  ternCtx.clearRect(0,0,W,H);
+  ternCtx.fillStyle = '#0f1929';
+  ternCtx.fillRect(0,0,W,H);
+
+  const pad = 38;
+  // Corners
+  const BL = ternXY(1,0,0); // Rock
+  const BR = ternXY(0,1,0); // Paper
+  const TP = ternXY(0,0,1); // Scissors
+
+  // Triangle
+  ternCtx.strokeStyle = '#444';
+  ternCtx.lineWidth = 1.5;
+  ternCtx.beginPath();
+  ternCtx.moveTo(BL.x,BL.y); ternCtx.lineTo(BR.x,BR.y);
+  ternCtx.lineTo(TP.x,TP.y); ternCtx.closePath();
+  ternCtx.stroke();
+
+  // Grid lines (10%, 20%...90%)
+  ternCtx.strokeStyle = 'rgba(100,100,100,0.25)';
+  ternCtx.lineWidth = 0.8;
+  for (let v=0.1;v<1;v+=0.1) {
+    const p1=ternXY(v,1-v,0), p2=ternXY(v,0,1-v);
+    ternCtx.beginPath(); ternCtx.moveTo(p1.x,p1.y); ternCtx.lineTo(p2.x,p2.y); ternCtx.stroke();
+    const q1=ternXY(0,v,1-v), q2=ternXY(1-v,v,0);
+    ternCtx.beginPath(); ternCtx.moveTo(q1.x,q1.y); ternCtx.lineTo(q2.x,q2.y); ternCtx.stroke();
+    const r1=ternXY(1-v,0,v), r2=ternXY(0,1-v,v);
+    ternCtx.beginPath(); ternCtx.moveTo(r1.x,r1.y); ternCtx.lineTo(r2.x,r2.y); ternCtx.stroke();
+  }
+
+  // Labels
+  ternCtx.font = 'bold 13px Arial';
+  ternCtx.textAlign = 'center';
+  ternCtx.fillStyle = '#e74c3c';
+  ternCtx.fillText('🪨 Rock', BL.x-22, BL.y+18);
+  ternCtx.fillStyle = '#3498db';
+  ternCtx.fillText('📄 Paper', BR.x+22, BR.y+18);
+  ternCtx.fillStyle = '#27ae60';
+  ternCtx.fillText('✂️ Scissors', TP.x, TP.y-14);
+
+  // NE centre
+  const ne = ternXY(1/3,1/3,1/3);
+  ternCtx.fillStyle = 'rgba(255,215,0,0.5)';
+  ternCtx.beginPath(); ternCtx.arc(ne.x,ne.y,5,0,Math.PI*2); ternCtx.fill();
+  ternCtx.fillStyle='#f0c040'; ternCtx.font='10px Arial';
+  ternCtx.fillText('NE',ne.x+14,ne.y+4);
+
+  // Trajectory
+  if (trajectory.length > 1) {
+    const MAXP = Math.min(trajectory.length, 600);
+    const step = Math.max(1, Math.floor(trajectory.length/MAXP));
+    ternCtx.lineWidth = 1.8;
+    for (let i=step; i<trajectory.length; i+=step) {
+      const t0=trajectory[i-step], t1=trajectory[i];
+      const p0=ternXY(t0.r,t0.p,t0.s), p1=ternXY(t1.r,t1.p,t1.s);
+      const frac = i/trajectory.length;
+      ternCtx.strokeStyle = `rgba(243,156,18,${0.25+frac*0.65})`;
+      ternCtx.beginPath(); ternCtx.moveTo(p0.x,p0.y); ternCtx.lineTo(p1.x,p1.y); ternCtx.stroke();
+    }
+  }
+
+  // Current position
+  if (trajectory.length > 0) {
+    const cur = trajectory[trajectory.length-1];
+    const pt  = ternXY(cur.r, cur.p, cur.s);
+    ternCtx.fillStyle='white';
+    ternCtx.beginPath(); ternCtx.arc(pt.x,pt.y,7,0,Math.PI*2); ternCtx.fill();
+    ternCtx.strokeStyle='#f39c12'; ternCtx.lineWidth=2.5;
+    ternCtx.stroke();
+  }
+}
+
+// ---- Line chart ----
+function drawChart() {
+  const W = chartCanvas.width = chartCanvas.offsetWidth;
+  const H = chartCanvas.height;
+  chartCtx.clearRect(0,0,W,H);
+  chartCtx.fillStyle='#0f1929'; chartCtx.fillRect(0,0,W,H);
+
+  const pad={l:36,r:10,t:8,b:24};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const n=chartHistory.r.length;
+  if (n<2) return;
+
+  // Axes
+  chartCtx.strokeStyle='#333'; chartCtx.lineWidth=1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(pad.l,pad.t); chartCtx.lineTo(pad.l,pad.t+ch);
+  chartCtx.lineTo(pad.l+cw,pad.t+ch); chartCtx.stroke();
+
+  // 1/3 line
+  chartCtx.strokeStyle='rgba(255,215,0,0.25)'; chartCtx.lineWidth=1; chartCtx.setLineDash([4,4]);
+  const yNE = pad.t + ch*(1-1/3);
+  chartCtx.beginPath(); chartCtx.moveTo(pad.l,yNE); chartCtx.lineTo(pad.l+cw,yNE); chartCtx.stroke();
+  chartCtx.setLineDash([]);
+  chartCtx.fillStyle='rgba(255,215,0,0.5)'; chartCtx.font='9px Arial'; chartCtx.textAlign='right';
+  chartCtx.fillText('NE',pad.l-2,yNE+3);
+
+  // Series
+  const series = [
+    {key:'r', color:'#e74c3c'},
+    {key:'p', color:'#3498db'},
+    {key:'s', color:'#27ae60'},
+  ];
+  for (const {key,color} of series) {
+    const data = chartHistory[key];
+    chartCtx.strokeStyle=color; chartCtx.lineWidth=2;
+    chartCtx.beginPath();
+    for (let i=0;i<n;i++){
+      const x=pad.l+i*(cw/(MAX_HIST-1)), y=pad.t+ch*(1-data[i]);
+      i===0?chartCtx.moveTo(x,y):chartCtx.lineTo(x,y);
+    }
+    chartCtx.stroke();
+  }
+
+  // Y labels
+  chartCtx.fillStyle='#888'; chartCtx.font='9px Arial'; chartCtx.textAlign='right';
+  for (const v of [0,0.25,0.5,0.75,1]) {
+    const y=pad.t+ch*(1-v);
+    chartCtx.fillText(v.toFixed(2),pad.l-3,y+3);
+    chartCtx.strokeStyle='rgba(100,100,100,0.15)'; chartCtx.lineWidth=0.5;
+    chartCtx.beginPath(); chartCtx.moveTo(pad.l,y); chartCtx.lineTo(pad.l+cw,y); chartCtx.stroke();
+  }
+}
+
+// ---- Animation loop ----
+function loop(ts) {
+  if (!running) return;
+  if (ts - lastTime >= getDelay()) {
+    lastTime = ts;
+    step();
+    render();
+  }
+  animId = requestAnimationFrame(loop);
+}
+
+function startSim() {
+  running = true;
+  document.getElementById('btnPlay').textContent = '⏸ Pause';
+  animId = requestAnimationFrame(loop);
+}
+function stopSim() {
+  running = false;
+  document.getElementById('btnPlay').textContent = '▶ Play';
+  if (animId) cancelAnimationFrame(animId);
+}
+
+// ---- Button events ----
+document.getElementById('btnPlay').addEventListener('click', () => {
+  running ? stopSim() : startSim();
+});
+document.getElementById('btnStep').addEventListener('click', () => {
+  stopSim(); step(); render();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  stopSim(); resize(); render();
+});
+document.getElementById('btnScatter').addEventListener('click', () => {
+  stopSim(); const g=GRID; initGrid(true); render();
+});
+
+// ---- Slider events ----
+slGrid.addEventListener('input', () => {
+  document.getElementById('lblGrid').textContent = slGrid.value+'×'+slGrid.value;
+  stopSim(); resize(); render();
+});
+slSpeed.addEventListener('input', () => {
+  const names=['very slow','slow','medium-slow','medium','medium','medium-fast','fast','fast','very fast','ultra'];
+  document.getElementById('lblSpeed').textContent = names[slSpeed.value-1]||'fast';
+});
+slWin.addEventListener('input', () => {
+  document.getElementById('lblWin').textContent = slWin.value;
+});
+slTie.addEventListener('input', () => {
+  document.getElementById('lblTie').textContent = slTie.value;
+});
+slMut.addEventListener('input', () => {
+  document.getElementById('lblMut').textContent = slMut.value+'%';
+});
+
+// ---- Responsive resize ----
+window.addEventListener('resize', () => { render(); drawTernary(); drawChart(); });
+
+// ---- INIT ----
+resize();
+updateStats();
+render();
+</script>
+</body>
+</html>

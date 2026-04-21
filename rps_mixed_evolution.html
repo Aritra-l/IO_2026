@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RPS Mixed Strategy Evolution</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0d0d1a;color:#eee;font-family:'Segoe UI',Arial,sans-serif;height:100vh;overflow:hidden;}
+  header{background:linear-gradient(135deg,#1a0533,#0f3460);padding:12px 28px;
+         border-bottom:2px solid #9b59b6;display:flex;align-items:center;justify-content:space-between;}
+  header h1{font-size:1.35em;color:#d7aefb;}
+  header .sub{font-size:0.8em;color:#aaa;}
+
+  .main{display:flex;height:calc(100vh - 54px);gap:0;}
+
+  /* LEFT PANEL */
+  .left{flex:0 0 auto;width:340px;background:#111126;border-right:1px solid #2a2a4a;
+        display:flex;flex-direction:column;overflow-y:auto;padding:12px;}
+
+  /* SIM CANVAS MIDDLE */
+  .mid{flex:1;display:flex;flex-direction:column;align-items:center;
+       justify-content:flex-start;padding:10px;gap:8px;background:#0d0d1a;}
+
+  /* RIGHT PANEL */
+  .right{flex:0 0 320px;background:#111126;border-left:1px solid #2a2a4a;
+         display:flex;flex-direction:column;padding:12px;gap:10px;overflow-y:auto;}
+
+  .card{background:#181830;border-radius:8px;padding:12px 14px;border:1px solid #2a2a4a;}
+  .card h3{font-size:0.82em;color:#9b59b6;text-transform:uppercase;
+            letter-spacing:0.06em;margin-bottom:8px;}
+
+  /* Controls */
+  .ctrl{display:flex;flex-direction:column;gap:7px;}
+  .ctrl-row{display:flex;align-items:center;gap:8px;}
+  .ctrl-row label{font-size:0.8em;color:#aaa;min-width:120px;}
+  .ctrl-row input[type=range]{flex:1;accent-color:#9b59b6;}
+  .badge{font-size:0.8em;color:#d7aefb;font-weight:bold;min-width:32px;text-align:right;}
+
+  /* Buttons */
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+  button{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;
+         font-size:0.82em;font-weight:bold;transition:all 0.15s;}
+  .btn-play {background:#27ae60;color:white;}
+  .btn-play:hover{background:#2ecc71;}
+  .btn-reset{background:#e74c3c;color:white;}
+  .btn-step {background:#3498db;color:white;}
+  .btn-rnd  {background:#9b59b6;color:white;}
+
+  /* Pop bar */
+  .pop-bar{height:22px;display:flex;border-radius:5px;overflow:hidden;margin:6px 0;}
+  .pop-seg{display:flex;align-items:center;justify-content:center;
+           font-size:0.7em;font-weight:bold;color:white;transition:width 0.25s;
+           overflow:hidden;white-space:nowrap;}
+
+  /* Type legend */
+  .type-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+  .type-item{display:flex;align-items:center;gap:5px;font-size:0.78em;}
+  .type-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+  /* Generation counter */
+  .gen-info{display:flex;justify-content:space-between;align-items:center;
+            font-size:0.85em;padding:4px 0;}
+  .gen-num{font-size:1.15em;color:#d7aefb;font-weight:bold;}
+
+  /* Tabs */
+  .tab-bar{display:flex;gap:0;border-bottom:1px solid #2a2a4a;margin-bottom:10px;}
+  .tab-btn{padding:5px 12px;background:none;border:none;color:#888;cursor:pointer;
+           font-size:0.8em;border-bottom:2px solid transparent;transition:all 0.15s;}
+  .tab-btn.active{color:#d7aefb;border-bottom-color:#9b59b6;}
+  .tab-pane{display:none;}
+  .tab-pane.active{display:block;}
+
+  canvas{border-radius:6px;display:block;}
+  #simCanvas{border:2px solid #2a2a4a;}
+
+  .scenario-btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+  .sc-btn{padding:5px 10px;border-radius:5px;border:1px solid #9b59b6;
+          background:#181830;color:#d7aefb;cursor:pointer;font-size:0.78em;
+          transition:all 0.15s;}
+  .sc-btn:hover,.sc-btn.active{background:#9b59b6;color:white;}
+
+  .stat-row{display:flex;justify-content:space-between;font-size:0.82em;
+            padding:3px 0;border-bottom:1px solid #2a2a4a;}
+  .stat-row:last-child{border:none;}
+  .stat-name{color:#aaa;}
+  .stat-val{color:#d7aefb;font-weight:bold;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🎯 Rock · Paper · Scissors — Mixed Strategy Evolution</h1>
+    <div class="sub">10 player types · replicator dynamics · real-time simulation</div>
+  </div>
+  <div class="gen-info">Gen: <span class="gen-num" id="genCtr">0</span></div>
+</header>
+
+<div class="main">
+<!-- ========== LEFT PANEL ========== -->
+<div class="left">
+
+  <div class="card">
+    <h3>Payoffs</h3>
+    <div class="ctrl">
+      <div class="ctrl-row">
+        <label>Win reward</label>
+        <input type="range" id="slWin" min="0.5" max="3" step="0.1" value="2.0">
+        <span class="badge" id="lblWin">2.0</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Tie reward</label>
+        <input type="range" id="slTie" min="0" max="2" step="0.1" value="1.0">
+        <span class="badge" id="lblTie">1.0</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Lose penalty</label>
+        <input type="range" id="slLose" min="0" max="1.5" step="0.1" value="0.0">
+        <span class="badge" id="lblLose">0.0</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Mutation rate</label>
+        <input type="range" id="slMut" min="0" max="5" step="0.1" value="0.5">
+        <span class="badge" id="lblMut">0.5%</span>
+      </div>
+      <div class="ctrl-row">
+        <label>Speed</label>
+        <input type="range" id="slSpeed" min="1" max="10" value="5">
+        <span class="badge" id="lblSpeed">5</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <h3>Starting Condition</h3>
+    <div class="scenario-btns">
+      <button class="sc-btn active" id="sc0" onclick="setScenario('equal')">Equal (1/10)</button>
+      <button class="sc-btn" id="sc1" onclick="setScenario('rrr')">100% rrr</button>
+      <button class="sc-btn" id="sc2" onclick="setScenario('sss')">100% sss</button>
+      <button class="sc-btn" id="sc3" onclick="setScenario('ppp')">100% ppp</button>
+      <button class="sc-btn" id="sc4" onclick="setScenario('rsp')">100% rsp (NE)</button>
+    </div>
+    <div class="btns" style="margin-top:10px;">
+      <button class="btn-play" id="btnPlay">▶ Play</button>
+      <button class="btn-step" onclick="doStep()">⏭ Step</button>
+      <button class="btn-reset" onclick="doReset()">↺ Reset</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <h3>Population Distribution</h3>
+    <div class="pop-bar" id="popBar"></div>
+    <div class="type-grid" id="typeGrid"></div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <h3>Statistics</h3>
+    <div id="statRows"></div>
+  </div>
+
+</div>
+
+<!-- ========== MIDDLE (canvas) ========== -->
+<div class="mid">
+  <canvas id="simCanvas"></canvas>
+  <!-- Aggregate R/P/S bar -->
+  <div style="width:100%;max-width:680px;">
+    <div style="font-size:0.8em;color:#888;margin-bottom:3px;">
+      Aggregate actions: 
+      <span style="color:#e74c3c">■ Rock</span>
+      <span style="color:#3498db;margin-left:8px">■ Paper</span>
+      <span style="color:#27ae60;margin-left:8px">■ Scissors</span>
+    </div>
+    <div class="pop-bar" id="aggBar" style="height:18px;">
+      <div class="pop-seg" id="aggR" style="background:#e74c3c;width:33%"></div>
+      <div class="pop-seg" id="aggP" style="background:#3498db;width:33%"></div>
+      <div class="pop-seg" id="aggS" style="background:#27ae60;width:34%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== RIGHT PANEL ========== -->
+<div class="right">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('ternary',this)">Simplex</button>
+    <button class="tab-btn"        onclick="showTab('chart',this)">Time Series</button>
+    <button class="tab-btn"        onclick="showTab('bar',this)">Bar Chart</button>
+  </div>
+
+  <div id="tab-ternary" class="tab-pane active">
+    <div style="font-size:0.75em;color:#888;margin-bottom:5px;">
+      Aggregate R/P/S on simplex · ⭐ start · ● now
+    </div>
+    <canvas id="ternaryCanvas" height="240"></canvas>
+  </div>
+  <div id="tab-chart" class="tab-pane">
+    <div style="font-size:0.75em;color:#888;margin-bottom:5px;">
+      Type frequencies over time (last 300 generations)
+    </div>
+    <canvas id="chartCanvas" height="240"></canvas>
+  </div>
+  <div id="tab-bar" class="tab-pane">
+    <div style="font-size:0.75em;color:#888;margin-bottom:5px;">
+      Current type frequencies
+    </div>
+    <canvas id="barCanvas" height="240"></canvas>
+  </div>
+
+  <!-- Wang et al comparison -->
+  <div class="card">
+    <h3>Wang et al. (2014) Prediction</h3>
+    <div class="stat-row"><span class="stat-name">Expected cycling dir.</span>
+      <span class="stat-val" id="wCycDir">—</span></div>
+    <div class="stat-row"><span class="stat-name">Dominant aggregate</span>
+      <span class="stat-val" id="wDom">—</span></div>
+    <div class="stat-row"><span class="stat-name">NE deviation</span>
+      <span class="stat-val" id="wDev">—</span></div>
+    <div class="stat-row"><span class="stat-name">Payoff vs NE (gcr-g0)</span>
+      <span class="stat-val" id="wPayoff">—</span></div>
+  </div>
+</div>
+</div>
+
+<script>
+// ============================================================
+// TYPE DEFINITIONS
+// 10 types: rrr, rrp, rrs, sss, ssr, ssp, ppp, ppr, pps, rsp
+// Each as (pRock, pPaper, pScissors)
+// ============================================================
+const TYPE_NAMES = ['rrr','rrp','rrs','sss','ssr','ssp','ppp','ppr','pps','rsp'];
+const TYPE_PROBS = [
+  [1, 0, 0],       // rrr
+  [2/3, 1/3, 0],   // rrp
+  [2/3, 0, 1/3],   // rrs
+  [0, 0, 1],       // sss
+  [1/3, 0, 2/3],   // ssr
+  [0, 1/3, 2/3],   // ssp
+  [0, 1, 0],       // ppp
+  [1/3, 2/3, 0],   // ppr
+  [0, 2/3, 1/3],   // pps
+  [1/3, 1/3, 1/3], // rsp  = NE
+];
+
+const TYPE_COLORS = [
+  '#e74c3c',  // rrr  pure Rock
+  '#ff7043',  // rrp  mostly Rock
+  '#ff5252',  // rrs  Rock-Scissors
+  '#26a69a',  // sss  pure Scissors
+  '#66bb6a',  // ssr  mostly Scissors
+  '#4db6ac',  // ssp  Scissors-Paper
+  '#42a5f5',  // ppp  pure Paper
+  '#7e57c2',  // ppr  Paper-Rock
+  '#ab47bc',  // pps  Paper-Scissors
+  '#ffd54f',  // rsp  NE strategy
+];
+
+// Payoff matrix: M[i][j] = payoff when playing action i vs j (0=R,1=P,2=S)
+// R beats S, P beats R, S beats P
+function makePayoffMatrix(win, tie, lose) {
+  return [
+    [tie,  lose, win ],  // Rock vs R,P,S
+    [win,  tie,  lose],  // Paper vs R,P,S
+    [lose, win,  tie ],  // Scissors vs R,P,S
+  ];
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let freqs = new Float64Array(10).fill(0.1);  // type frequencies
+let history = [];   // {freqs, gen}
+let trajectory = []; // {r,p,s}
+let gen = 0;
+let running = false;
+let animId = null;
+let lastTs = 0;
+let scenario = 'equal';
+let startFreqs = null;
+
+const MAX_HIST = 300;
+
+// ============================================================
+// SIMULATION (replicator dynamics with stochastic noise)
+// ============================================================
+function getWin()  { return parseFloat(document.getElementById('slWin').value); }
+function getTie()  { return parseFloat(document.getElementById('slTie').value); }
+function getLose() { return parseFloat(document.getElementById('slLose').value); }
+function getMut()  { return parseFloat(document.getElementById('slMut').value)/100; }
+function getDelay(){ return Math.max(8, 200 - parseInt(document.getElementById('slSpeed').value)*18); }
+
+function computeFitness(freqs, M) {
+  // G[i][j] = p_i . M . p_j
+  const n = TYPE_PROBS.length;
+  const F = new Float64Array(n);
+  for (let i=0;i<n;i++) {
+    for (let j=0;j<n;j++) {
+      let g = 0;
+      for (let a=0;a<3;a++) for (let b=0;b<3;b++) g += TYPE_PROBS[i][a]*M[a][b]*TYPE_PROBS[j][b];
+      F[i] += freqs[j] * g;
+    }
+  }
+  return F;
+}
+
+function stepSim() {
+  const M = makePayoffMatrix(getWin(), getTie(), getLose());
+  const n = freqs.length;
+  const F = computeFitness(freqs, M);
+
+  let Favg = 0;
+  for (let i=0;i<n;i++) Favg += freqs[i]*F[i];
+  if (Favg < 1e-12) Favg = 1e-12;
+
+  const newFreqs = new Float64Array(n);
+  for (let i=0;i<n;i++) newFreqs[i] = freqs[i] * F[i] / Favg;
+
+  // Mutation
+  const mu = getMut();
+  if (mu > 0) {
+    const out = mu * newFreqs.reduce((a,b)=>a+b,0);
+    for (let i=0;i<n;i++) newFreqs[i] = newFreqs[i]*(1-mu) + out/n;
+  }
+
+  // Small noise (finite population effect)
+  let s = 0;
+  for (let i=0;i<n;i++) {
+    newFreqs[i] = Math.max(0, newFreqs[i] + (Math.random()-0.5)*0.004);
+    s += newFreqs[i];
+  }
+  if (s<1e-12) { freqs.fill(1/n); return; }
+  for (let i=0;i<n;i++) newFreqs[i]/=s;
+
+  freqs = newFreqs;
+  gen++;
+
+  // History
+  const snap = new Float64Array(freqs);
+  history.push(snap);
+  if (history.length > MAX_HIST) history.shift();
+
+  // Aggregate R/P/S
+  let ar=0,ap=0,as2=0;
+  for (let i=0;i<n;i++) { ar+=freqs[i]*TYPE_PROBS[i][0]; ap+=freqs[i]*TYPE_PROBS[i][1]; as2+=freqs[i]*TYPE_PROBS[i][2]; }
+  trajectory.push({r:ar,p:ap,s:as2});
+  if (trajectory.length > 600) trajectory.shift();
+}
+
+// ============================================================
+// CANVAS RENDERING
+// ============================================================
+
+// --- SIMULATION CANVAS: grid of agents ---
+const simCanvas  = document.getElementById('simCanvas');
+const simCtx     = simCanvas.getContext('2d');
+
+let agentGrid = null; // flat array of type indices
+const AGRID = 40;  // 40x40 agent grid
+
+function initAgents() {
+  agentGrid = new Uint8Array(AGRID*AGRID);
+  placeAgents();
+}
+
+function placeAgents() {
+  const n = AGRID*AGRID;
+  // Sample each agent's type according to current freqs
+  const cum = [];
+  let c = 0;
+  for (let i=0;i<freqs.length;i++) { c+=freqs[i]; cum.push(c); }
+  for (let i=0;i<n;i++) {
+    const r = Math.random();
+    for (let t=0;t<cum.length;t++) { if(r<cum[t]){agentGrid[i]=t;break;} }
+  }
+}
+
+function updateAgentGrid() {
+  // Update a fraction of agents based on current freqs (smooth visual transition)
+  const n = AGRID*AGRID;
+  const nUpdate = Math.max(1, Math.floor(n * 0.15)); // update 15% each frame
+  const cum = [];
+  let c = 0;
+  for (let i=0;i<freqs.length;i++) { c+=freqs[i]; cum.push(c); }
+  for (let k=0;k<nUpdate;k++) {
+    const idx = Math.floor(Math.random()*n);
+    const r = Math.random();
+    for (let t=0;t<cum.length;t++) { if(r<cum[t]){agentGrid[idx]=t;break;} }
+  }
+}
+
+function renderSim() {
+  const W=simCanvas.width, H=simCanvas.height;
+  const cell=Math.floor(Math.min(W,H)/AGRID);
+  simCtx.clearRect(0,0,W,H);
+  simCtx.fillStyle='#0d0d1a'; simCtx.fillRect(0,0,W,H);
+
+  for (let r=0;r<AGRID;r++) for (let c=0;c<AGRID;c++) {
+    const t=agentGrid[r*AGRID+c];
+    simCtx.fillStyle=TYPE_COLORS[t];
+    simCtx.fillRect(c*cell, r*cell, cell-1, cell-1);
+    if (cell>=10) {
+      simCtx.fillStyle='rgba(255,255,255,0.9)';
+      simCtx.font=`bold ${Math.floor(cell*0.58)}px monospace`;
+      simCtx.textAlign='center'; simCtx.textBaseline='middle';
+      simCtx.fillText(TYPE_NAMES[t][0].toUpperCase(), c*cell+cell/2, r*cell+cell/2);
+    }
+  }
+}
+
+// --- TERNARY CANVAS ---
+const ternCanvas = document.getElementById('ternaryCanvas');
+const ternCtx    = ternCanvas.getContext('2d');
+
+function ternXY(r,p,s) {
+  const W=ternCanvas.width, H=ternCanvas.height, pad=32;
+  const tw=W-2*pad, bh=(H-2*pad)*0.9;
+  return { x: pad+(p+s*0.5)*tw, y: (H-pad)-s*bh };
+}
+
+function drawTernary() {
+  const W=ternCanvas.width=ternCanvas.offsetWidth||290;
+  const H=ternCanvas.height;
+  ternCtx.clearRect(0,0,W,H);
+  ternCtx.fillStyle='#0d1120'; ternCtx.fillRect(0,0,W,H);
+
+  const BL=ternXY(1,0,0), BR=ternXY(0,1,0), TP=ternXY(0,0,1);
+
+  // Grid lines
+  ternCtx.strokeStyle='rgba(100,100,150,0.2)'; ternCtx.lineWidth=0.7;
+  for (let v=0.2;v<1;v+=0.2) {
+    [[ternXY(v,1-v,0),ternXY(v,0,1-v)],[ternXY(0,v,1-v),ternXY(1-v,v,0)],
+     [ternXY(1-v,0,v),ternXY(0,1-v,v)]].forEach(([a,b])=>{
+      ternCtx.beginPath(); ternCtx.moveTo(a.x,a.y); ternCtx.lineTo(b.x,b.y); ternCtx.stroke();
+    });
+  }
+  // Triangle
+  ternCtx.strokeStyle='#555'; ternCtx.lineWidth=1.8;
+  ternCtx.beginPath(); ternCtx.moveTo(BL.x,BL.y); ternCtx.lineTo(BR.x,BR.y);
+  ternCtx.lineTo(TP.x,TP.y); ternCtx.closePath(); ternCtx.stroke();
+
+  // Labels
+  ternCtx.font='bold 11px Arial'; ternCtx.textAlign='center';
+  ternCtx.fillStyle='#e74c3c'; ternCtx.fillText('Rock',BL.x-18,BL.y+16);
+  ternCtx.fillStyle='#42a5f5'; ternCtx.fillText('Paper',BR.x+20,BR.y+16);
+  ternCtx.fillStyle='#26a69a'; ternCtx.fillText('Scissors',TP.x,TP.y-12);
+
+  // NE
+  const ne=ternXY(1/3,1/3,1/3);
+  ternCtx.fillStyle='rgba(255,213,79,0.6)';
+  ternCtx.beginPath(); ternCtx.arc(ne.x,ne.y,5,0,Math.PI*2); ternCtx.fill();
+
+  // Starting point
+  if (startFreqs) {
+    const sp=ternXY(startFreqs.r,startFreqs.p,startFreqs.s);
+    ternCtx.fillStyle='rgba(255,255,255,0.8)';
+    ternCtx.font='14px Arial'; ternCtx.fillText('⭐',sp.x,sp.y);
+  }
+
+  // Trajectory
+  if (trajectory.length>1) {
+    const step=Math.max(1,Math.floor(trajectory.length/200));
+    for (let i=step;i<trajectory.length;i+=step) {
+      const t0=trajectory[i-step],t1=trajectory[i];
+      const p0=ternXY(t0.r,t0.p,t0.s),p1=ternXY(t1.r,t1.p,t1.s);
+      const frac=i/trajectory.length;
+      ternCtx.strokeStyle=`hsla(${270+frac*90},80%,65%,${0.3+frac*0.6})`;
+      ternCtx.lineWidth=1.5;
+      ternCtx.beginPath(); ternCtx.moveTo(p0.x,p0.y); ternCtx.lineTo(p1.x,p1.y); ternCtx.stroke();
+    }
+    const cur=trajectory[trajectory.length-1];
+    const pt=ternXY(cur.r,cur.p,cur.s);
+    ternCtx.fillStyle='white';
+    ternCtx.beginPath(); ternCtx.arc(pt.x,pt.y,6,0,Math.PI*2); ternCtx.fill();
+    ternCtx.strokeStyle='#d7aefb'; ternCtx.lineWidth=2;
+    ternCtx.stroke();
+  }
+}
+
+// --- TIME SERIES CHART ---
+const chartCanvas=document.getElementById('chartCanvas');
+const chartCtx=chartCanvas.getContext('2d');
+
+function drawChart() {
+  const W=chartCanvas.width=chartCanvas.offsetWidth||290;
+  const H=chartCanvas.height;
+  chartCtx.clearRect(0,0,W,H);
+  chartCtx.fillStyle='#0d1120'; chartCtx.fillRect(0,0,W,H);
+
+  if (history.length<2) return;
+  const pad={l:32,r:8,t:8,b:20};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const n=history.length;
+
+  // NE line
+  chartCtx.strokeStyle='rgba(255,213,79,0.2)'; chartCtx.lineWidth=1; chartCtx.setLineDash([3,3]);
+  const yNE=pad.t+ch*(1-1/TYPE_NAMES.length);
+  chartCtx.beginPath(); chartCtx.moveTo(pad.l,yNE); chartCtx.lineTo(pad.l+cw,yNE); chartCtx.stroke();
+  chartCtx.setLineDash([]);
+
+  for (let t=0;t<TYPE_NAMES.length;t++) {
+    chartCtx.strokeStyle=TYPE_COLORS[t]; chartCtx.lineWidth=1.8;
+    chartCtx.beginPath();
+    for (let i=0;i<n;i++) {
+      const x=pad.l+i*(cw/(MAX_HIST-1));
+      const y=pad.t+ch*(1-history[i][t]);
+      i===0?chartCtx.moveTo(x,y):chartCtx.lineTo(x,y);
+    }
+    chartCtx.stroke();
+  }
+
+  // Y axis
+  chartCtx.fillStyle='#666'; chartCtx.font='8px Arial'; chartCtx.textAlign='right';
+  for (const v of [0,0.5,1]) {
+    const y=pad.t+ch*(1-v);
+    chartCtx.fillText(v.toFixed(1),pad.l-3,y+3);
+    chartCtx.strokeStyle='rgba(100,100,100,0.1)'; chartCtx.lineWidth=0.5;
+    chartCtx.beginPath(); chartCtx.moveTo(pad.l,y); chartCtx.lineTo(pad.l+cw,y); chartCtx.stroke();
+  }
+}
+
+// --- BAR CHART ---
+const barCanvas=document.getElementById('barCanvas');
+const barCtx=barCanvas.getContext('2d');
+
+function drawBar() {
+  const W=barCanvas.width=barCanvas.offsetWidth||290;
+  const H=barCanvas.height;
+  barCtx.clearRect(0,0,W,H);
+  barCtx.fillStyle='#0d1120'; barCtx.fillRect(0,0,W,H);
+
+  const pad={l:8,r:8,t:8,b:40};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const n=TYPE_NAMES.length;
+  const bw=cw/n*0.8, gap=cw/n*0.2;
+
+  for (let i=0;i<n;i++) {
+    const x=pad.l+i*(bw+gap)+gap/2;
+    const bh=ch*freqs[i];
+    barCtx.fillStyle=TYPE_COLORS[i];
+    barCtx.fillRect(x, pad.t+ch-bh, bw, bh);
+    // Label
+    barCtx.fillStyle='#888'; barCtx.font='8px monospace';
+    barCtx.textAlign='center';
+    barCtx.fillText(TYPE_NAMES[i], x+bw/2, H-pad.b/2+6);
+    barCtx.fillStyle='rgba(255,255,255,0.8)'; barCtx.font='8px Arial';
+    if (freqs[i]>0.04) barCtx.fillText((freqs[i]*100).toFixed(1)+'%', x+bw/2, pad.t+ch-bh-3);
+  }
+
+  // 1/n line
+  const y1n=pad.t+ch*(1-1/n);
+  barCtx.strokeStyle='rgba(255,213,79,0.4)'; barCtx.lineWidth=1; barCtx.setLineDash([3,3]);
+  barCtx.beginPath(); barCtx.moveTo(pad.l,y1n); barCtx.lineTo(pad.l+cw,y1n); barCtx.stroke();
+  barCtx.setLineDash([]);
+  barCtx.fillStyle='rgba(255,213,79,0.6)'; barCtx.font='9px Arial'; barCtx.textAlign='left';
+  barCtx.fillText('NE',pad.l+2,y1n-3);
+}
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function updateUI() {
+  document.getElementById('genCtr').textContent=gen;
+
+  // Population bar
+  const bar=document.getElementById('popBar');
+  bar.innerHTML='';
+  for (let i=0;i<TYPE_NAMES.length;i++) {
+    const pct=(freqs[i]*100).toFixed(1);
+    const d=document.createElement('div');
+    d.className='pop-seg'; d.style.background=TYPE_COLORS[i];
+    d.style.width=pct+'%'; d.title=TYPE_NAMES[i]+': '+pct+'%';
+    if (freqs[i]>0.08) d.textContent=TYPE_NAMES[i];
+    bar.appendChild(d);
+  }
+
+  // Type grid
+  const tg=document.getElementById('typeGrid');
+  tg.innerHTML='';
+  for (let i=0;i<TYPE_NAMES.length;i++) {
+    const d=document.createElement('div'); d.className='type-item';
+    d.innerHTML=`<div class="type-dot" style="background:${TYPE_COLORS[i]}"></div>
+      <span>${TYPE_NAMES[i]}: <b>${(freqs[i]*100).toFixed(1)}%</b></span>`;
+    tg.appendChild(d);
+  }
+
+  // Aggregate R/P/S
+  let ar=0,ap=0,as2=0;
+  for (let i=0;i<TYPE_NAMES.length;i++) {
+    ar+=freqs[i]*TYPE_PROBS[i][0]; ap+=freqs[i]*TYPE_PROBS[i][1]; as2+=freqs[i]*TYPE_PROBS[i][2];
+  }
+  document.getElementById('aggR').style.width=(ar*100)+'%';
+  document.getElementById('aggP').style.width=(ap*100)+'%';
+  document.getElementById('aggS').style.width=(as2*100)+'%';
+
+  // Stats
+  const dominant=TYPE_NAMES[freqs.indexOf(Math.max(...freqs))];
+  const entropy=-Array.from(freqs).reduce((s,f)=>f>0?s+f*Math.log(f):s,0);
+  const NEdist=Math.sqrt(Array.from(freqs).reduce((s,f)=>s+(f-1/10)**2,0));
+  document.getElementById('statRows').innerHTML=`
+    <div class="stat-row"><span class="stat-name">Dominant type</span><span class="stat-val">${dominant}</span></div>
+    <div class="stat-row"><span class="stat-name">Shannon entropy</span><span class="stat-val">${entropy.toFixed(3)}</span></div>
+    <div class="stat-row"><span class="stat-name">NE distance</span><span class="stat-val">${NEdist.toFixed(4)}</span></div>
+    <div class="stat-row"><span class="stat-name">Agg. Rock frac</span><span class="stat-val">${(ar*100).toFixed(1)}%</span></div>
+    <div class="stat-row"><span class="stat-name">Agg. Paper frac</span><span class="stat-val">${(ap*100).toFixed(1)}%</span></div>
+    <div class="stat-row"><span class="stat-name">Agg. Scissors frac</span><span class="stat-val">${(as2*100).toFixed(1)}%</span></div>
+  `;
+
+  // Wang et al comparison
+  let cycDir='CCW (R→P→S→R)';
+  const g0=(1+getWin())/3;
+  const gcr_est=g0+0.002*(getWin()-2);
+  document.getElementById('wCycDir').textContent=cycDir;
+  document.getElementById('wDom').textContent=ar>ap&&ar>as2?'Rock':ap>as2?'Paper':'Scissors';
+  document.getElementById('wDev').textContent=NEdist.toFixed(4);
+  document.getElementById('wPayoff').textContent=(gcr_est-g0>=0?'+':'')+(gcr_est-g0).toFixed(4);
+}
+
+// ============================================================
+// SCENARIOS
+// ============================================================
+function setScenario(name) {
+  scenario=name;
+  document.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('active'));
+  const map={'equal':'sc0','rrr':'sc1','sss':'sc2','ppp':'sc3','rsp':'sc4'};
+  if(map[name]) document.getElementById(map[name]).classList.add('active');
+  doReset();
+}
+
+function doReset() {
+  stopSim();
+  const n=TYPE_NAMES.length;
+  freqs=new Float64Array(n);
+  switch(scenario) {
+    case 'equal':  freqs.fill(1/n); break;
+    case 'rrr':    freqs[0]=1; break;
+    case 'sss':    freqs[3]=1; break;
+    case 'ppp':    freqs[6]=1; break;
+    case 'rsp':    freqs[9]=1; break;
+    default:       freqs.fill(1/n);
+  }
+  gen=0; history=[]; trajectory=[];
+  // Record starting aggregate
+  let ar=0,ap=0,as2=0;
+  for(let i=0;i<n;i++){ar+=freqs[i]*TYPE_PROBS[i][0];ap+=freqs[i]*TYPE_PROBS[i][1];as2+=freqs[i]*TYPE_PROBS[i][2];}
+  startFreqs={r:ar,p:ap,s:as2};
+  placeAgents();
+  updateUI(); renderSim(); drawTernary(); drawChart(); drawBar();
+}
+
+function doStep() {
+  stopSim();
+  stepSim();
+  updateAgentGrid();
+  renderSim();
+  updateUI();
+  const tab=document.querySelector('.tab-pane.active').id;
+  if(tab==='tab-ternary') drawTernary();
+  else if(tab==='tab-chart') drawChart();
+  else drawBar();
+}
+
+// ============================================================
+// ANIMATION
+// ============================================================
+function loop(ts) {
+  if (!running) return;
+  if (ts-lastTs >= getDelay()) {
+    lastTs=ts;
+    for(let k=0;k<3;k++) stepSim(); // multi-step per frame for speed
+    updateAgentGrid();
+    renderSim();
+    updateUI();
+    const tab=document.querySelector('.tab-pane.active').id;
+    if(tab==='tab-ternary') drawTernary();
+    else if(tab==='tab-chart') drawChart();
+    else drawBar();
+  }
+  animId=requestAnimationFrame(loop);
+}
+
+function startSim() {
+  running=true;
+  document.getElementById('btnPlay').textContent='⏸ Pause';
+  animId=requestAnimationFrame(loop);
+}
+function stopSim() {
+  running=false;
+  document.getElementById('btnPlay').textContent='▶ Play';
+  if(animId) cancelAnimationFrame(animId);
+}
+
+document.getElementById('btnPlay').addEventListener('click',()=>{
+  running?stopSim():startSim();
+});
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='ternary') drawTernary();
+  else if(name==='chart') drawChart();
+  else drawBar();
+}
+
+// ============================================================
+// SLIDER EVENTS
+// ============================================================
+['slWin','slTie','slLose','slMut','slSpeed'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',function(){
+    const lbl={'slWin':'lblWin','slTie':'lblTie','slLose':'lblLose',
+                'slMut':'lblMut','slSpeed':'lblSpeed'}[id];
+    const suffix=id==='slMut'?'%':'';
+    document.getElementById(lbl).textContent=parseFloat(this.value).toFixed(1)+suffix;
+  });
+});
+
+// ============================================================
+// CANVAS RESIZE
+// ============================================================
+function resizeSim() {
+  const mid=document.querySelector('.mid');
+  const w=mid.clientWidth-20;
+  const h=mid.clientHeight-70;
+  const sz=Math.min(w,h,680);
+  simCanvas.width=simCanvas.height=sz;
+}
+
+window.addEventListener('resize',()=>{
+  resizeSim(); renderSim();
+  drawTernary(); drawChart(); drawBar();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+resizeSim();
+initAgents();
+doReset();
+</script>
+</body>
+</html>
